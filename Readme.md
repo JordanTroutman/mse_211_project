@@ -16,13 +16,6 @@ Run `pip install -r requirements.txt`, but make sure the virtual enviroment is a
 
 
 
-
-# Activating 
-
-(Turn on virtual environment using `source env/bin/activate`)
-
-In your terminal run `pip install -r requirements.txt`
-
 # Running Notebook for Project
 1. If you are using a virtual environment, make sure the environment is running first.
 
