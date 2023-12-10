@@ -1,6 +1,40 @@
-# Q5: Tic-tac-toe
+class Game:
+    @property
+    def states(self):
+        return self._states
 
-class TicTacToe:
+    def rewards(self, state, action):
+        return self._rewards[state][action]
+
+    @property
+    def actions(self):
+        return self._actions
+
+    def transitions(self, state, action):
+        return self._transitions[state][action]
+
+    def gamma(self):
+        return self.gamma
+
+    def values(self):
+        return self._values
+
+class SimpleGame(Game):
+    def __init__(self):
+        self._actions = [(0, 1), (0, 1), (0, 1), (0, 1), (0, 1)]
+        self._states = (0, 1, 2, 3, 4)
+        self._rewards = [-1, -1, 10, -1, -1]
+        self.gamma = 0.9
+        self._transitions = [
+                [[0.9, 0.1], [0.1, 0.9], [0, 0], [0, 0], [0, 0]],
+                [[0.9, 0.1], [0, 0], [0.1, 0.9], [0, 0], [0, 0]],
+                [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0]],
+                [[0, 0], [0, 0], [0.9, 0.1], [0, 0], [0.1, 0.9]],
+                [[0, 0], [0, 0], [0, 0], [0.9, 0.1], [0.1, 0.9]],
+            ]
+        self._values = [0, 0, 0, 0, 0]
+
+class TicTacToe(Game):
     def __init__(self):
         # init the board
         self.board = [['-'] * 3 for _ in range(3)]

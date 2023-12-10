@@ -1,22 +1,5 @@
 from abc import abstractmethod
 import random
-import numpy as np
-import matplotlib.pyplot as plt
-
-class SimpleGame:
-    def __init__(self):
-        self.actions = (0, 1)
-        self.states = (0, 1, 2, 3, 4)
-        self.rewards = [-1, -1, 10, -1, -1]
-        self.gamma = 0.9
-        self.probs = [
-                [[0.9, 0.1], [0.1, 0.9], [0, 0], [0, 0], [0, 0]],
-                [[0.9, 0.1], [0, 0], [0.1, 0.9], [0, 0], [0, 0]],
-                [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0]],
-                [[0, 0], [0, 0], [0.9, 0.1], [0, 0], [0.1, 0.9]],
-                [[0, 0], [0, 0], [0, 0], [0.9, 0.1], [0.1, 0.9]],
-            ]
-        self.V = [0, 0, 0, 0, 0]
 
 class IValueIteration:
     def __init__(self, game, sample_rate=1):

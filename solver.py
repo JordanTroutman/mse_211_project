@@ -40,8 +40,8 @@ class ValueIterator(ABC):
             costs = []
             for action in mdp.actions(state):
                 # Immediate reward
-                state_action_cost = mdp.reward(state, action)
-                for (next_state, p) in mdp.transition(state, action):
+                state_action_cost = mdp.rewards(state)
+                for (next_state, p) in mdp.transitions(state, action):
                     # Values based on next states
                     state_action_cost += gamma * p * V[next_state]
 
