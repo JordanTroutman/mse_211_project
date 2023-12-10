@@ -1,3 +1,6 @@
+import itertools
+from typing import List
+
 class Game:
     @property
     def states(self):
@@ -21,18 +24,72 @@ class Game:
 
 class SimpleGame(Game):
     def __init__(self):
-        self._actions = [(0, 1), (0, 1), (0, 1), (0, 1), (0, 1)]
+        self._actions = [[0, 1, 2, 3, 4] for _ in range(5)]
         self._states = (0, 1, 2, 3, 4)
         self._rewards = [-1, -1, 10, -1, -1]
-        self.gamma = 0.9
+        self.gamma = 1
         self._transitions = [
-                [[0.9, 0.1], [0.1, 0.9], [0, 0], [0, 0], [0, 0]],
-                [[0.9, 0.1], [0, 0], [0.1, 0.9], [0, 0], [0, 0]],
-                [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0]],
-                [[0, 0], [0, 0], [0.9, 0.1], [0, 0], [0.1, 0.9]],
-                [[0, 0], [0, 0], [0, 0], [0.9, 0.1], [0.1, 0.9]],
+                [0.9, 0.1, 0, 0, 0], # state 0
+                [0.9, 0, 0.1, 0, 0],
+                [0, 0, 0, 0, 0],
+                [0, 0, 0.9, 0, 0.1],
+                [0, 0, 0, 0.9, 0.1],
             ]
         self._values = [0, 0, 0, 0, 0]
+
+
+class GridWorld:
+    def __init__(self, n):
+        """ Make a grid of size n"""
+        self.n = n
+        self.states = list(itertools.product(list(range(self.n)), list(range(self.n))))
+        self._actions = {}
+        self.gamma = 0.9
+        self.V = { state: 0 for state in self.states}
+
+    def actions(self, state) -> List:
+        if state in self._actions:
+            return self._actions[state]
+
+        x, y = state
+        action_set = []
+
+        if x - 1 >= 0:
+            action_set.append("LEFT")
+        if x + 1 < self.n:
+            action_set.append("RIGHT")
+        if y - 1 >= 0:
+            action_set.append("UP")
+        if y + 1 < self.n:
+            action_set.append("DOWN")
+            
+
+        self._actions[state] = action_set
+        
+        return action_set
+
+    def transitions(self, state, action):
+        """
+        List of tuples with states and probability of transitioning to 
+        given state
+        """
+        x, y = state
+        if action == "LEFT":
+            return [((x - 1, y), 1.0)]
+        if action == "RIGHT":
+            return [((x + 1, y), 1.0)]
+        if action == "UP":
+            return [((x, y - 1), 1.0)]
+        if action == "DOWN":
+            return [((x, y + 1), 1.0)]
+
+    def rewards(self, state):
+        x, y = state
+        if x == 0 and y == self.n - 1:
+            return 1
+        else:
+            return 0
+
 
 class TicTacToe(Game):
     def __init__(self):
@@ -102,14 +159,3 @@ class Player:
 
     def __str__(self):
         return f"Player {self.name}"
-
-b = TicTacToe()
-p1 = Player(1, "O")
-p2 = Player(2, "X")
-
-b.mark(p1, 1, 1)
-b.mark(p2, 0, 1)
-b.mark(p1, 0, 0)
-b.mark(p2, 2, 1)
-print(b.mark(p1, 2, 2))
-print(b)
