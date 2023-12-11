@@ -1,5 +1,6 @@
 import itertools
 from abc import ABC, abstractmethod, abstractproperty
+from enum import Enum
 
 class MDP(ABC):
 

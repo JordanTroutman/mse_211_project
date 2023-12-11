@@ -35,7 +35,7 @@ class ValueIterator(ABC):
 
     
     def iterate(self, mdp, gamma, V_0):
-        V = copy.deepcopy(V_0)
+        V = V_0
         V_copy = None if self.update_rule != UpdateRule.AFTER_SWEEP else copy.deepcopy(V_0)
         
         # If update during sweep, use the same v
@@ -45,8 +45,8 @@ class ValueIterator(ABC):
             costs = []
             for action in mdp.actions(state):
                 # Immediate reward
-                state_action_cost = mdp.rewards(state)
-                for (next_state, p) in mdp.transitions(state, action):
+                state_action_cost = mdp.reward(state, action)
+                for (next_state, p) in mdp.transition(state, action):
                     # Values based on next states
                     state_action_cost += gamma * p * V[next_state]
 
@@ -102,10 +102,6 @@ class CyclicVI(ValueIterator):
         return UpdateRule.DURING_SWEEP
 
 class RandomCyclicVI(ValueIterator):
-    def __init__(self, k):
-        super().__init__()
-        self.k = k
-
     def get_states(self, states, **kwargs):
         return random.sample(states, k=len(states))
 
@@ -144,7 +140,9 @@ class Solver:
             time_difference = time.time() - t_0
             time_each_step.append(time_difference)
 
-            step += 1   
+            step += 1
+
+            
 
         self.solution = V
         self.deltas = deltas
@@ -167,4 +165,3 @@ class Solver:
             plt.plot(time_steps, label=label)
             plt.xlabel("Time Step")
             plt.ylabel("Time (s)")
-
