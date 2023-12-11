@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import copy
 from collections import Counter, defaultdict
+import time
 
 class IValueIteration:
     def __init__(self, game, sample_rate=1):
@@ -21,6 +22,7 @@ class ClassicValueIteration(IValueIteration):
 
     def run(self, V_new, counter):
         delta = 0
+        start = time.time()
         for s in self.game.states:
             max_val = 0
             for a in self.game.actions(s):
@@ -32,7 +34,7 @@ class ClassicValueIteration(IValueIteration):
             delta = max(delta, abs(self.game.V[s] - V_new[s]))
 
         self.game.V = copy.deepcopy(V_new)
-        return delta
+        return delta, time.time() - start
 
 class EmpiricalValueIteration(IValueIteration):
     def __str__(self) -> str:
@@ -40,6 +42,7 @@ class EmpiricalValueIteration(IValueIteration):
 
     def run(self, V_new, counters):
         delta = 0
+        start = time.time()
         for s in self.game.states:
             max_val = 0
             max_action = None
@@ -47,19 +50,14 @@ class EmpiricalValueIteration(IValueIteration):
             # guess actions
             actions = self.game.actions(s)
             next_actions = set()
-            for _ in range(2):
+            for _ in range(1): # X times
                 a = self.get_action(counters, s, actions)
                 if a:
                     next_actions.add(a)
 
-            # fallback if no actions are selected
-            if not next_actions:
-                next_actions = actions
-
             for a in next_actions:
                 val = self.game.rewards(s)
                 for (s_next, p) in self.game.transitions(s, a):
-                        # pp = self.get_prob(counters, s, a)
                         val += p * self.game.gamma * self.game.V[s_next]
                 max_val = max(max_val, val)
 
@@ -74,22 +72,12 @@ class EmpiricalValueIteration(IValueIteration):
             delta = max(delta, abs(self.game.V[s] - V_new[s]))
 
         self.game.V = copy.deepcopy(V_new)
-        return delta
-    
-    def get_prob(self, counters, state, action):
-        counter = counters[state]
-        if not counter:
-            return 0
-        total = 0
-        for (action, count) in counter.items():
-            total += count
-        
-        return counter[action] / total
+        return delta, time.time() - start
 
     def get_action(self, counters, state, actions):
         counter = counters[state]
         if not counter:
-            # uniform
+            # random select
             return random.choice(actions)
         total = 0
         prefix_sum = {}
@@ -102,12 +90,15 @@ class EmpiricalValueIteration(IValueIteration):
             if r < p_sum:
                 return action
 
+        return action
+
 
 class RandomValueIteration(IValueIteration):
     def __str__(self) -> str:
         return "RandomVI"
 
     def run(self, V_new, counter):
+        start = time.time()
         delta = 0
         # rather than go through all state values in each iteration
         # randomly select a subset of states
@@ -119,20 +110,19 @@ class RandomValueIteration(IValueIteration):
                     val = self.game.rewards(s)
                     for (s_next, p) in self.game.transitions(s, a):
                         val += p * self.game.gamma * self.game.V[s_next]
-                    # for s_next in self.game.states:
-                    #     val += self.game.probs[s][s_next][a] * (self.game.gamma * self.game.V[s_next])
                     max_val = max(max_val, val)
                 V_new[s] = max_val
             delta = max(delta, abs(self.game.V[s] - V_new[s]))
 
         self.game.V = copy.deepcopy(V_new)
-        return delta
+        return delta, time.time() - start
 
 class CyclicValueIteration(IValueIteration):
     def __str__(self) -> str:
         return "CyclicVI"
 
     def run(self, V_new, counter):
+        start = time.time()
         delta = 0
         for s in self.game.states:
             max_val = 0
@@ -141,18 +131,17 @@ class CyclicValueIteration(IValueIteration):
                 val = self.game.rewards(s)
                 for (s_next, p) in self.game.transitions(s, a):
                     val += p * (self.game.gamma * self.game.V[s_next])
-                # for s_next in self.game.states:
-                #     val += self.game.probs[s][s_next][a] * (self.game.gamma * self.game.V[s_next])
                 max_val = max(max_val, val)
             self.game.V[s] = max_val
             delta = max(delta, abs(v - self.game.V[s]))
-        return delta
+        return delta, time.time() - start
 
 class RandomCyclicValueIteration(IValueIteration):
     def __str__(self) -> str:
         return "RandomCyclicVI"
 
     def run(self, V_new, counter):
+        start = time.time()
         delta = 0
         # rather than go through all state values in each iteration
         # randomly select a subset of states
@@ -165,12 +154,10 @@ class RandomCyclicValueIteration(IValueIteration):
                     val = self.game.rewards(s)
                     for (s_next, p) in self.game.transitions(s, a):
                         val += p * (self.game.gamma * self.game.V[s_next])
-                    # for s_next in self.game.states:
-                    #     val += self.game.probs[s][s_next][a] * (self.game.gamma * self.game.V[s_next])
                     max_val = max(max_val, val)
                 self.game.V[s] = max_val
             delta = max(delta, abs(v - self.game.V[s]))
-        return delta
+        return delta, time.time() - start
 
 class VISimulation:
     def __init__(self, method):
@@ -181,26 +168,20 @@ class VISimulation:
         iter = 0
         states = list(itertools.product(list(range(5)), list(range(5))))
         counters = defaultdict(Counter)
+        time_spents = []
 
         V_new = { state: 0 for state in states}
         while iter < max_iter:
-            delta = self.method.run(V_new, counters)
+            (delta, time_spent) = self.method.run(V_new, counters)
             res.append(delta)
+            time_spents.append(time_spent)
             if delta < theta:
                 break
             iter += 1
 
-        print(f'# of iterations: {len(res)}')
+        print(f'{self.method}: # of iterations: {len(res)}')
+        print(f'{self.method}: Average time per iteration: {sum(time_spents)/ len(time_spents)}')
 
-        plt.plot(res, label=str(self.method), alpha=0.3)
+        plt.plot(np.arange(len(res)) + 1, res, label=str(self.method), alpha=0.3)
         plt.xlabel("Iteration")
         plt.ylabel("Delta")
-
-        # fig, ax = plt.subplots(1, 1, figsize=(3, 2), dpi=200)
-        # ax.plot(np.arange(len(res)) + 1, res, marker='o', markersize=4,
-        #         alpha=0.7, color='#2ca02c', label=r'$\theta= $' + "{:.2E}".format(theta))
-        # ax.set_xlabel('Iteration')
-        # ax.set_ylabel('Delta')
-        # ax.legend()
-        # plt.tight_layout()
-        # plt.show()
