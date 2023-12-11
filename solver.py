@@ -1,7 +1,12 @@
+import matplotlib.pyplot as plt
+import numpy as np
+
 import random
 from enum import Enum
 from abc import ABC, abstractmethod, abstractproperty
 import copy
+import itertools
+import time
 # States
 # Actions
 
@@ -48,7 +53,7 @@ class ValueIterator(ABC):
                 costs.append(state_action_cost)
                 
 
-            new_cost = max(costs)
+            new_cost = max(costs, default=0)
             
             if self.update_rule == UpdateRule.DURING_SWEEP:
                 V[state] = new_cost
@@ -98,13 +103,11 @@ class CyclicVI(ValueIterator):
 
 class RandomCyclicVI(ValueIterator):
     def get_states(self, states, **kwargs):
-        return random.sample(states)
+        return random.sample(states, k=len(states))
 
     @property
     def update_rule(self):
         return UpdateRule.DURING_SWEEP
-
-
 
 class Solver:
     def __init__(self, iterator, mdp, gamma):
@@ -113,28 +116,51 @@ class Solver:
         self.gamma = gamma
         self.solution = None
         self.deltas = None
+        self.time_each_step = None
 
-    def solve(self, steps=100):
+    def solve(self, steps=None, threshold=None):
+        assert (steps is not None) != (threshold is not None), "either steps or threshold should be defined"
         V = { state: 0 for state in self.mdp.states}
         deltas = []
-        for i in range(steps):
+        time_each_step = []
+
+        step = 0
+        while ((threshold is not None) and (len(deltas) == 0 or deltas[-1] > threshold)) or (steps is not None and step <= steps):
+            t_0 = time.time()
+            
+            V_0 = copy.deepcopy(V)
             V_new = self.iterator.iterate(self.mdp, self.gamma, V)
             
             # Calculate the delta by seeing the biggest change between the two versions
-            delta = max([abs(V_new[state] - V[state]) for state in V])
+            delta = max([abs(V_new[state] - V_0[state]) for state in V])
             deltas.append(delta)
 
             V = V_new
 
+            time_difference = time.time() - t_0
+            time_each_step.append(time_difference)
+
+            step += 1   
+
         self.solution = V
         self.deltas = deltas
+        self.time_each_step = time_each_step
 
 
     def plot_delta(self):
         deltas = self.deltas
         if deltas is not None:
             label = self.iterator.name
-            plt.plot(deltas, label=label, alpha=0.3)
+            plt.plot(deltas, label=label, alpha=0.9)
             plt.xlabel("Iteration")
             plt.ylabel("Delta")
+
+
+    def plot_time(self):
+        time_steps = self.time_each_step
+        if time_steps is not None:
+            label = self.iterator.name
+            plt.plot(time_steps, label=label)
+            plt.xlabel("Time Step")
+            plt.ylabel("Time (s)")
 
