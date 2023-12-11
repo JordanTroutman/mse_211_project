@@ -46,19 +46,11 @@ class EmpiricalValueIteration(IValueIteration):
         for s in self.game.states:
             max_val = 0
             max_action = None
-
-            # guess actions
-            actions = self.game.actions(s)
-            next_actions = set()
-            for _ in range(1): # X times
-                a = self.get_action(counters, s, actions)
-                if a:
-                    next_actions.add(a)
-
-            for a in next_actions:
+            for a in self.game.actions(s):
                 val = self.game.rewards(s)
                 for (s_next, p) in self.game.transitions(s, a):
-                        val += p * self.game.gamma * self.game.V[s_next]
+                        update_prob = self.get_prob(counters, s, a)
+                        val += update_prob * p * self.game.gamma * self.game.V[s_next]
                 max_val = max(max_val, val)
 
                 if max_val == val:
@@ -73,25 +65,16 @@ class EmpiricalValueIteration(IValueIteration):
 
         self.game.V = copy.deepcopy(V_new)
         return delta, time.time() - start
-
-    def get_action(self, counters, state, actions):
+    
+    def get_prob(self, counters, state, action):
         counter = counters[state]
         if not counter:
-            # random select
-            return random.choice(actions)
+            return 1
         total = 0
-        prefix_sum = {}
         for (action, count) in counter.items():
             total += count
-            prefix_sum[total] = action
         
-        r = random.randint(1, total)
-        for p_sum, action in prefix_sum.items():
-            if r < p_sum:
-                return action
-
-        return action
-
+        return counter[action] / total
 
 class RandomValueIteration(IValueIteration):
     def __str__(self) -> str:
