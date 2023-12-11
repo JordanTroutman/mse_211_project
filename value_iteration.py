@@ -1,22 +1,9 @@
 from abc import abstractmethod
 import random
-import numpy as np
+import itertools
 import matplotlib.pyplot as plt
-
-class SimpleGame:
-    def __init__(self):
-        self.actions = (0, 1)
-        self.states = (0, 1, 2, 3, 4)
-        self.rewards = [-1, -1, 10, -1, -1]
-        self.gamma = 0.9
-        self.probs = [
-                [[0.9, 0.1], [0.1, 0.9], [0, 0], [0, 0], [0, 0]],
-                [[0.9, 0.1], [0, 0], [0.1, 0.9], [0, 0], [0, 0]],
-                [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0]],
-                [[0, 0], [0, 0], [0.9, 0.1], [0, 0], [0.1, 0.9]],
-                [[0, 0], [0, 0], [0, 0], [0.9, 0.1], [0.1, 0.9]],
-            ]
-        self.V = [0, 0, 0, 0, 0]
+import numpy as np
+import copy
 
 class IValueIteration:
     def __init__(self, game, sample_rate=1):
@@ -32,14 +19,17 @@ class ClassicValueIteration(IValueIteration):
         delta = 0
         for s in self.game.states:
             max_val = 0
-            for a in self.game.actions:
-                val = self.game.rewards[s]
-                for s_next in self.game.states:
-                    val += self.game.probs[s][s_next][a] * (self.game.gamma * self.game.V[s_next])
+            for a in self.game.actions(s):
+                val = self.game.rewards(s)
+                for (s_next, p) in self.game.transitions(s, a):
+                    val += p * (self.game.gamma * self.game.V[s_next])
+                # for s_next in self.game.states:
+                #     val += self.game.probs[s][s_next][a] * (self.game.gamma * self.game.V[s_next])
                 max_val = max(max_val, val)
             V_new[s] = max_val
             delta = max(delta, abs(self.game.V[s] - V_new[s]))
-        self.game.V = V_new
+
+        self.game.V = copy.deepcopy(V_new)
         return delta
 
 class RandomValueIteration(IValueIteration):
@@ -48,16 +38,20 @@ class RandomValueIteration(IValueIteration):
         # rather than go through all state values in each iteration
         # randomly select a subset of states
         sampled_states = random.sample(self.game.states, int(self.sample_rate * len(self.game.states)))
-        for s in sampled_states:
-            max_val = 0
-            for a in self.game.actions:
-                val = self.game.rewards[s]
-                for s_next in sampled_states:
-                    val += self.game.probs[s][s_next][a] * (self.game.gamma * self.game.V[s_next])
-                max_val = max(max_val, val)
-            V_new[s] = max_val
+        for s in self.game.states:
+            if s in sampled_states:
+                max_val = 0
+                for a in self.game.actions(s):
+                    val = self.game.rewards(s)
+                    for (s_next, p) in self.game.transitions(s, a):
+                        val += p * self.game.gamma * self.game.V[s_next]
+                    # for s_next in self.game.states:
+                    #     val += self.game.probs[s][s_next][a] * (self.game.gamma * self.game.V[s_next])
+                    max_val = max(max_val, val)
+                V_new[s] = max_val
             delta = max(delta, abs(self.game.V[s] - V_new[s]))
-        V = V_new
+
+        self.game.V = copy.deepcopy(V_new)
         return delta
 
 class CyclicValueIteration(IValueIteration):
@@ -66,10 +60,12 @@ class CyclicValueIteration(IValueIteration):
         for s in self.game.states:
             max_val = 0
             v = self.game.V[s]
-            for a in self.game.actions:
-                val = self.game.rewards[s]
-                for s_next in self.game.states:
-                    val += self.game.probs[s][s_next][a] * (self.game.gamma * self.game.V[s_next])
+            for a in self.game.actions(s):
+                val = self.game.rewards(s)
+                for (s_next, p) in self.game.transitions(s, a):
+                    val += p * (self.game.gamma * self.game.V[s_next])
+                # for s_next in self.game.states:
+                #     val += self.game.probs[s][s_next][a] * (self.game.gamma * self.game.V[s_next])
                 max_val = max(max_val, val)
             self.game.V[s] = max_val
             delta = max(delta, abs(v - self.game.V[s]))
@@ -81,15 +77,18 @@ class RandomCyclicValueIteration(IValueIteration):
         # rather than go through all state values in each iteration
         # randomly select a subset of states
         sampled_states = random.sample(self.game.states, int(self.sample_rate * len(self.game.states)))
-        for s in sampled_states:
-            max_val = 0
+        for s in self.game.states:
             v = self.game.V[s]
-            for a in self.game.actions:
-                val = self.game.rewards[s]
-                for s_next in sampled_states:
-                    val += self.game.probs[s][s_next][a] * (self.game.gamma * self.game.V[s_next])
-                max_val = max(max_val, val)
-            self.game.V[s] = max_val
+            if s in sampled_states:
+                max_val = 0
+                for a in self.game.actions(s):
+                    val = self.game.rewards(s)
+                    for (s_next, p) in self.game.transitions(s, a):
+                        val += p * (self.game.gamma * self.game.V[s_next])
+                    # for s_next in self.game.states:
+                    #     val += self.game.probs[s][s_next][a] * (self.game.gamma * self.game.V[s_next])
+                    max_val = max(max_val, val)
+                self.game.V[s] = max_val
             delta = max(delta, abs(v - self.game.V[s]))
         return delta
 
@@ -100,11 +99,10 @@ class VISimulation:
     def simulate(self, max_iter, theta):
         res = []
         iter = 0
-        V = [0, 0, 0, 0, 0]
+        states = list(itertools.product(list(range(5)), list(range(5))))
+        V_new = { state: 0 for state in states}
         while iter < max_iter:
-            V_new = [0, 0, 0, 0, 0]
             delta = self.method.run(V_new)
-            V = V_new
             res.append(delta)
             if delta < theta:
                 break
@@ -119,12 +117,3 @@ class VISimulation:
         ax.legend()
         plt.tight_layout()
         plt.show()
-
-        return res
-
-# m = ClassicValueIteration(SimpleGame())
-m = RandomValueIteration(SimpleGame(), sample_rate=0.9)
-# m = CyclicValueIteration(SimpleGame())
-# m = RandomCyclicValueIteration(SimpleGame(), sample_rate=0.8)
-
-res = VISimulation(m).simulate(10000, 1e-100)
