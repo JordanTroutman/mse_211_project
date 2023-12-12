@@ -41,7 +41,7 @@ class ValueIterator(ABC):
     def iterate(self, mdp, gamma, V_0, counters):
         V = V_0
         V_copy = None if self.update_rule != UpdateRule.AFTER_SWEEP else copy.deepcopy(V_0)
-        
+        A = {}
         # If update during sweep, use the same v
         # If not updating during sweep, store and update later
         
@@ -62,6 +62,14 @@ class ValueIterator(ABC):
                 if max_cost == state_action_cost:
                     counters[state][action] += 1
 
+                costs.append((state_action_cost, action))
+                
+            (new_cost, _) = max(costs, default=(0, "NOACTION"), key=lambda x: x[0])
+      
+            # There can be multiple actions with the same policy value
+            max_actions = list(map(lambda x: x[1], filter(lambda x: x[0] == new_cost, costs)))
+            A[state] = max_actions
+            
             if self.update_rule == UpdateRule.DURING_SWEEP:
                 V[state] = max_cost
 
@@ -70,9 +78,9 @@ class ValueIterator(ABC):
 
         # Return values at the end
         if self.update_rule == UpdateRule.AFTER_SWEEP:
-            return V_copy
+            return (V_copy, A)
         elif self.update_rule == UpdateRule.DURING_SWEEP:
-            return V
+            return (V, A)
 
 
 
@@ -144,10 +152,13 @@ class Solver:
         self.solution = None
         self.deltas = None
         self.time_each_step = None
+        self.policy = None
 
     def solve(self, steps=None, threshold=None):
         assert (steps is not None) != (threshold is not None), "either steps or threshold should be defined"
         V = { state: 0 for state in self.mdp.states}
+
+        Policy = {}
         deltas = []
         time_each_step = []
         counters = defaultdict(Counter)
@@ -157,7 +168,8 @@ class Solver:
             t_0 = time.time()
             
             V_0 = copy.deepcopy(V)
-            V_new = self.iterator.iterate(self.mdp, self.gamma, V, counters)
+
+            (V_new, A) = self.iterator.iterate(self.mdp, self.gamma, V, counters)
             
             # Calculate the delta by seeing the biggest change between the two versions
             delta = max([abs(V_new[state] - V_0[state]) for state in V])
@@ -170,11 +182,14 @@ class Solver:
 
             step += 1
 
+            Policy = A
+
             
 
         self.solution = V
         self.deltas = deltas
         self.time_each_step = time_each_step
+        self.policy = Policy
 
 
     def plot_delta(self):
