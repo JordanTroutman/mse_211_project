@@ -1,3 +1,4 @@
+from collections import Counter, defaultdict
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -29,12 +30,15 @@ class ValueIterator(ABC):
     def update_rule(self):
         pass
 
+    def get_empirical_prob(self, counters, state, action):
+        return 1
+
     @property
     def name(self):
         return type(self).__name__
 
     
-    def iterate(self, mdp, gamma, V_0):
+    def iterate(self, mdp, gamma, V_0, counters):
         V = V_0
         V_copy = None if self.update_rule != UpdateRule.AFTER_SWEEP else copy.deepcopy(V_0)
         
@@ -48,7 +52,8 @@ class ValueIterator(ABC):
                 state_action_cost = mdp.reward(state, action)
                 for (next_state, p) in mdp.transition(state, action):
                     # Values based on next states
-                    state_action_cost += gamma * p * V[next_state]
+                    empirical_prob = self.get_empirical_prob(counters, state, action)
+                    state_action_cost += gamma * p * empirical_prob * V[next_state]
 
                 costs.append(state_action_cost)
                 
@@ -93,6 +98,27 @@ class RandomVI(ValueIterator):
     def name(self):
         return "{} (k={})".format(type(self).__name__, self.k)
 
+class EmpiricalVI(ValueIterator):
+    def __init__(self):
+        super().__init__()
+
+    def get_states(self, states, **kwargs):
+        return states
+
+    def get_empirical_prob(self, counters, state, action):
+        counter = counters[state]
+        if not counter:
+            return 1
+        total = 0
+        for (action, count) in counter.items():
+            total += count
+
+        return counter[action] / total
+
+    @property
+    def update_rule(self):
+        return UpdateRule.AFTER_SWEEP
+
 class CyclicVI(ValueIterator):
     def get_states(self, states, **kwargs):
         return states
@@ -123,13 +149,14 @@ class Solver:
         V = { state: 0 for state in self.mdp.states}
         deltas = []
         time_each_step = []
+        counters = defaultdict(Counter)
 
         step = 0
         while ((threshold is not None) and (len(deltas) == 0 or deltas[-1] > threshold)) or (steps is not None and step <= steps):
             t_0 = time.time()
             
             V_0 = copy.deepcopy(V)
-            V_new = self.iterator.iterate(self.mdp, self.gamma, V)
+            V_new = self.iterator.iterate(self.mdp, self.gamma, V, counters)
             
             # Calculate the delta by seeing the biggest change between the two versions
             delta = max([abs(V_new[state] - V_0[state]) for state in V])
