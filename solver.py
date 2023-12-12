@@ -46,21 +46,23 @@ class ValueIterator(ABC):
         # If not updating during sweep, store and update later
         
         for state in self.get_states(mdp.states):
-            costs = []
             max_cost = 0
+            max_action = None
             for action in mdp.actions(state):
                 # Immediate reward
                 state_action_cost = mdp.reward(state, action)
+                empirical_prob = self.get_empirical_prob(counters, state, action)
                 for (next_state, p) in mdp.transition(state, action):
                     # Values based on next states
-                    empirical_prob = self.get_empirical_prob(counters, state, action)
                     state_action_cost += gamma * p * empirical_prob * V[next_state]
 
                 max_cost = max(max_cost, state_action_cost)
+                if max_cost == state_action_cost:
+                    max_action = action
 
                 # record the best action for the state
-                if max_cost == state_action_cost:
-                    counters[state][action] += 1
+            if max_action:
+                counters[state][max_action] += 1
 
                 costs.append((state_action_cost, action))
                 
@@ -109,9 +111,6 @@ class RandomVI(ValueIterator):
         return "{} (k={})".format(type(self).__name__, self.k)
 
 class EmpiricalVI(ValueIterator):
-    def __init__(self):
-        super().__init__()
-
     def get_states(self, states, **kwargs):
         return states
 
