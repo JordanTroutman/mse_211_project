@@ -48,6 +48,7 @@ class ValueIterator(ABC):
         for state in self.get_states(mdp.states):
             max_cost = 0
             max_action = None
+            costs = []
             for action in mdp.actions(state):
                 # Immediate reward
                 state_action_cost = mdp.reward(state, action)
