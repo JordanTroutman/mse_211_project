@@ -1,3 +1,4 @@
+from collections import Counter, defaultdict
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -29,12 +30,15 @@ class ValueIterator(ABC):
     def update_rule(self):
         pass
 
+    def get_empirical_prob(self, counters, state, action):
+        return 1
+
     @property
     def name(self):
         return type(self).__name__
 
     
-    def iterate(self, mdp, gamma, V_0):
+    def iterate(self, mdp, gamma, V_0, counters):
         V = V_0
         V_copy = None if self.update_rule != UpdateRule.AFTER_SWEEP else copy.deepcopy(V_0)
         A = {}
@@ -43,27 +47,34 @@ class ValueIterator(ABC):
         
         for state in self.get_states(mdp.states):
             costs = []
+            max_cost = 0
             for action in mdp.actions(state):
                 # Immediate reward
                 state_action_cost = mdp.reward(state, action)
                 for (next_state, p) in mdp.transition(state, action):
                     # Values based on next states
-                    state_action_cost += gamma * p * V[next_state]
+                    empirical_prob = self.get_empirical_prob(counters, state, action)
+                    state_action_cost += gamma * p * empirical_prob * V[next_state]
 
+                max_cost = max(max_cost, state_action_cost)
+
+                # record the best action for the state
+                if max_cost == state_action_cost:
+                    counters[state][action] += 1
 
                 costs.append((state_action_cost, action))
                 
-
             (new_cost, _) = max(costs, default=(0, "NOACTION"), key=lambda x: x[0])
+      
             # There can be multiple actions with the same policy value
             max_actions = list(map(lambda x: x[1], filter(lambda x: x[0] == new_cost, costs)))
             A[state] = max_actions
-
+            
             if self.update_rule == UpdateRule.DURING_SWEEP:
-                V[state] = new_cost
-                
+                V[state] = max_cost
+
             elif self.update_rule == UpdateRule.AFTER_SWEEP:
-                V_copy[state] = new_cost
+                V_copy[state] = max_cost
 
         # Return values at the end
         if self.update_rule == UpdateRule.AFTER_SWEEP:
@@ -96,6 +107,26 @@ class RandomVI(ValueIterator):
     @property
     def name(self):
         return "{} (k={})".format(type(self).__name__, self.k)
+
+class EmpiricalVI(ValueIterator):
+    def __init__(self):
+        super().__init__()
+
+    def get_states(self, states, **kwargs):
+        return states
+
+    def get_empirical_prob(self, counters, state, action):
+        counter = counters[state]
+        if not counter:
+            return 1
+        total = 0
+        for (action, count) in counter.items():
+            total += count
+        return counter[action] / total
+
+    @property
+    def update_rule(self):
+        return UpdateRule.AFTER_SWEEP
 
 class CyclicVI(ValueIterator):
     def get_states(self, states, **kwargs):
@@ -130,13 +161,15 @@ class Solver:
         Policy = {}
         deltas = []
         time_each_step = []
+        counters = defaultdict(Counter)
 
         step = 0
         while ((threshold is not None) and (len(deltas) == 0 or deltas[-1] > threshold)) or (steps is not None and step <= steps):
             t_0 = time.time()
             
             V_0 = copy.deepcopy(V)
-            (V_new, A) = self.iterator.iterate(self.mdp, self.gamma, V)
+
+            (V_new, A) = self.iterator.iterate(self.mdp, self.gamma, V, counters)
             
             # Calculate the delta by seeing the biggest change between the two versions
             delta = max([abs(V_new[state] - V_0[state]) for state in V])
