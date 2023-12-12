@@ -201,6 +201,7 @@ class GridWorld(MDP):
         self.n = n
         self.states = list(itertools.product(list(range(self.n)), list(range(self.n))))
         self._actions = {}
+        self.V = { state: 0 for state in self.states}
 
     def actions(self, state):
         if state in self._actions:
